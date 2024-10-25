@@ -1,0 +1,28 @@
+output_dir: "/leonardo_scratch/large/userexternal/gpuccett/models/vocab_adaptation/summarization_finetunes/mistral_adapted_sgd_3B_full_continued_news-summary-lora"
+model_name: "/leonardo_scratch/large/userexternal/lmoroni0/vocab_adaptation/full_mistral_continued_en1_it3_minerva_sgd_3B_full_subst/checkpoints/huggingface/ba2000"
+# Lora Config
+use_lora: true
+lora_r: 8
+lora_alpha: 16
+target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+lora_dropout: 0.05
+# Template
+response_template: "###Summary:"
+prompt_template: "###Text:"
+# Training Parameters
+training_bs: 64 # this will be needed to create gradient accumulation
+micro_training_bs: 2 # per device batch size
+evaluation_bs: 4
+num_train_epochs: 1
+## Optimizer Parameters
+weight_decay: 0.005
+learning_rate: 2.0e-04
+lr_scheduler_type: "linear"
+warmup_ratio: 0.1

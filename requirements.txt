@@ -1,0 +1,9 @@
+peft
+trl
+transformers
+datasets
+sentencepiece
+rouge-score
+wandb
+bitsandbytes
+flash-attn
