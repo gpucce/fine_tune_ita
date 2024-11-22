@@ -10,18 +10,25 @@ import nltk
 import yaml
 import argparse
 from accelerate import Accelerator
-
+import os
+os.environ['WANDB_MODE'] ="offline"
+os.environ['CUDA_LAUNCH_BLOCKING']="1"
+os.environ['TORCH_USE_CUDA_DSA'] = "1"
 def get_current_device() -> int:
     """Get the current device. For GPU we return the local process index to enable multiple GPU training."""
     return Accelerator().local_process_index if torch.cuda.is_available() else "cpu"
 
 # FORMATTING
-def generate_formatting_prompts_func(tokenizer, prompt_template, response_template):
+def generate_formatting_prompts_func(tokenizer, prompt_template, response_template, max_source_len, max_target_len):
     def formatting_prompts_func(example):
         output_texts = []
         for i in range(len(example['source'])):
-            text = f"{prompt_template} {example['source'][i]}\n{response_template} {example['target'][i]}{tokenizer.eos_token}"
-            output_texts.append(text)
+            if max_source_len >0 and max_target_len >0:
+                text = f"{prompt_template} {example['source'][i][:max_source_len]}\n{response_template} {example['target'][i][:max_target_len]}{tokenizer.eos_token}"
+                output_texts.append(text)
+            else:
+                text = f"{prompt_template} {example['source'][i]}\n{response_template} {example['target'][i]}{tokenizer.eos_token}"
+                output_texts.append(text)
         return output_texts
     
     return formatting_prompts_func
@@ -90,7 +97,9 @@ def main(args):
     learning_rate = config_loaded["learning_rate"]
     lr_scheduler_type = config_loaded["lr_scheduler_type"]
     warmup_ratio = config_loaded["warmup_ratio"]
-
+    max_source_len = config_loaded["max_source_len"]
+    max_target_len = config_loaded["max_target_len"]
+    max_seq_length = max_source_len + max_target_len
     # DATASET
     print("## Load Dataset...")
 
@@ -102,7 +111,9 @@ def main(args):
     dataset_newsum["train"] = concatenate_datasets([dataset_fanpage["train"], dataset_ilpost["train"]])
     dataset_newsum["validation"] = concatenate_datasets([dataset_fanpage["validation"], dataset_ilpost["validation"]])
     dataset_newsum["test"] = concatenate_datasets([dataset_fanpage["test"], dataset_ilpost["test"]])
-
+    #dataset_newsum["train"] = dataset_newsum["train"].select(range(100))
+    #dataset_newsum["validation"] = dataset_newsum["validation"].select(range(5000))
+    #dataset_newsum["test"] = dataset_newsum["test"].select(range(1000))
     # TOKENIZER
     print("## Initialize Tokenizer...")
 
@@ -111,7 +122,8 @@ def main(args):
     tokenizer.padding_side = 'right'
     initial_token_count = len(tokenizer)
     added_token_count = tokenizer.add_special_tokens({"additional_special_tokens": [prompt_template, response_template]})
-
+    print("initial_token_count = len(tokenizer) ", initial_token_count)
+    #print("initial_token_count = len(tokenizer) +added_token_count", initial_token_count+added_token_count)
     # MODEL
     print("## Load Model...")
 
@@ -208,10 +220,10 @@ def main(args):
         train_dataset=dataset_newsum["train"],
         eval_dataset=dataset_newsum["validation"].select(idx),
         tokenizer=tokenizer,
-        formatting_func=generate_formatting_prompts_func(tokenizer, prompt_template, response_template),
+        formatting_func=generate_formatting_prompts_func(tokenizer, prompt_template, response_template, max_source_len, max_target_len),
         # compute_metrics=generate_compute_metrics(tokenizer, "rouge"),
         data_collator=collator,
-        max_seq_length=2048,
+        max_seq_length=max_seq_length,#2048,
         args=training_args
     )
 
@@ -224,7 +236,7 @@ def main(args):
     unwrapped_model = unwrapped_model.merge_and_unload()
     
     unwrapped_model.save_pretrained(
-        args.output_dir,
+        output_dir,
         is_main_process=accelerator.is_main_process,
         save_function=accelerator.save,
         state_dict=accelerator.get_state_dict(model),
