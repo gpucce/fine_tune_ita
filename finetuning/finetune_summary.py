@@ -76,6 +76,23 @@ def generate_compute_metrics(tokenizer, metric_name="rouge"):
     
     return compute_metrics
 
+def evaluate_model(tokenizer, model, prompt_template, example, metric_name):
+    pred_output = []
+    for i in range(len(example['source'])):
+        prompt = f"{prompt_template}{example['source'][i][:max_source_len]}"
+        inputs = tokenizer(prompt, return_tensors="pt")
+        generate_ids = model.generate(inputs.input_ids, max_length=30)
+        pred = tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
+        pred_output.append(pred)
+    
+    
+    metric = evaluate.load(metric_name)
+    result = metric.compute(predictions=pred_output, references=example['target'], use_stemmer=True)
+    result = {k: round(v * 100, 4) for k, v in result.items()}
+    prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds]
+    result["gen_len"] = np.mean(prediction_lens)
+    return result
+
 def main(args):
 
     config_path = args.config_path
@@ -242,7 +259,7 @@ def main(args):
         state_dict=accelerator.get_state_dict(model),
     )
     tokenizer.save_pretrained(output_dir)
-    preds = model.generate(tokenizer)
+    results = evaluate_model(tokenizer, model, prompt_template, example, metric_name)
 
 
 if __name__ == "__main__":
