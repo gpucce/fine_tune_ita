@@ -242,7 +242,7 @@ def main(args):
         state_dict=accelerator.get_state_dict(model),
     )
     tokenizer.save_pretrained(output_dir)
-
+    preds = model.generate(tokenizer)
 
 
 if __name__ == "__main__":
