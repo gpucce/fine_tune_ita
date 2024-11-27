@@ -4,3 +4,4 @@
 /wandb/
 conda_list.txt
 /shared_lora.config/
+/.vscode/
