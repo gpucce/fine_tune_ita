@@ -76,22 +76,6 @@ def generate_compute_metrics(tokenizer, metric_name="rouge"):
     
     return compute_metrics
 
-def evaluate_model(tokenizer, model, prompt_template, example, metric_name):
-    pred_output = []
-    for i in range(len(example['source'])):
-        prompt = f"{prompt_template}{example['source'][i][:max_source_len]}"
-        inputs = tokenizer(prompt, return_tensors="pt")
-        generate_ids = model.generate(inputs.input_ids, max_length=30)
-        pred = tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-        pred_output.append(pred)
-    
-    
-    metric = evaluate.load(metric_name)
-    result = metric.compute(predictions=pred_output, references=example['target'], use_stemmer=True)
-    result = {k: round(v * 100, 4) for k, v in result.items()}
-    prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds]
-    result["gen_len"] = np.mean(prediction_lens)
-    return result
 
 def main(args):
 
@@ -128,9 +112,9 @@ def main(args):
     dataset_newsum["train"] = concatenate_datasets([dataset_fanpage["train"], dataset_ilpost["train"]])
     dataset_newsum["validation"] = concatenate_datasets([dataset_fanpage["validation"], dataset_ilpost["validation"]])
     dataset_newsum["test"] = concatenate_datasets([dataset_fanpage["test"], dataset_ilpost["test"]])
-    #dataset_newsum["train"] = dataset_newsum["train"].select(range(100))
-    #dataset_newsum["validation"] = dataset_newsum["validation"].select(range(5000))
-    #dataset_newsum["test"] = dataset_newsum["test"].select(range(1000))
+    dataset_newsum["train"] = dataset_newsum["train"]
+    dataset_newsum["validation"] = dataset_newsum["validation"]
+    dataset_newsum["test"] = dataset_newsum["test"]
     # TOKENIZER
     print("## Initialize Tokenizer...")
 
@@ -139,8 +123,6 @@ def main(args):
     tokenizer.padding_side = 'right'
     initial_token_count = len(tokenizer)
     added_token_count = tokenizer.add_special_tokens({"additional_special_tokens": [prompt_template, response_template]})
-    print("initial_token_count = len(tokenizer) ", initial_token_count)
-    #print("initial_token_count = len(tokenizer) +added_token_count", initial_token_count+added_token_count)
     # MODEL
     print("## Load Model...")
 
@@ -259,7 +241,6 @@ def main(args):
         state_dict=accelerator.get_state_dict(model),
     )
     tokenizer.save_pretrained(output_dir)
-    results = evaluate_model(tokenizer, model, prompt_template, example, metric_name)
 
 
 if __name__ == "__main__":

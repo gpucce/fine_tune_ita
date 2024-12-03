@@ -7,9 +7,6 @@ This repo contains several utilities to finetune Decoder-only LLM on two differe
 Installing this tool is very straight forward
 
 ``` sh
-git clone git@github.com:Andrew-Wyn/minerva_sft.git
-
-cd minerva_sft
 
 pip install -r requirements.txt
 ```
@@ -42,6 +39,8 @@ weight_decay: 5e-3
 learning_rate: 1e-5
 lr_scheduler_type: "linear"
 wermup_ratio: 0.3
+max_source_len: 5000
+max_target_len: 700
 ````
 
 ### Run

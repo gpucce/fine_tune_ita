@@ -1,5 +1,6 @@
 output_dir: "/raid/homes/kajal.negi/workspace/fine_tune_ita/kajal_edits/model"
 model_name: "/raid/homes/kajal.negi/workspace/fine_tune_ita/model_fine_ita"
+results_dir: "/raid/homes/kajal.negi/workspace/fine_tune_ita/results"
 # Lora Config
 use_lora: true
 lora_r: 8
@@ -26,5 +27,5 @@ weight_decay: 0.005
 learning_rate: 2.0e-04
 lr_scheduler_type: "linear"
 warmup_ratio: 0.1
-max_source_len: 6000
-max_target_len: 1000
+max_source_len: 5000
+max_target_len: 500
