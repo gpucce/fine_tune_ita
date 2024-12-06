@@ -95,7 +95,7 @@ def main(args):
     dataset_newsum = DatasetDict()
     
     dataset_newsum["test"] = concatenate_datasets([dataset_fanpage["test"], dataset_ilpost["test"]])
-    dataset_newsum["test"] = dataset_newsum["test"].select(range(8))
+    dataset_newsum["test"] = dataset_newsum["test"]#.select(range(8))
     # TOKENIZER
     print("## Initialize Tokenizer...")
 
