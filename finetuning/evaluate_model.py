@@ -1,5 +1,5 @@
 from datasets import load_dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, TextGenerationPipeline, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 import torch
 import evaluate 
 import pandas as pd
@@ -14,8 +14,6 @@ import os
 import argparse
 import yaml
 from peft import prepare_model_for_kbit_training, LoraConfig, get_peft_model  
-from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
-
 from accelerate import Accelerator
 import json
 
@@ -27,17 +25,7 @@ def get_current_device() -> int:
     return Accelerator().local_process_index if torch.cuda.is_available() else "cpu"
 
 def postprocess_text(preds, labels, consider_just_n_sentence=1):
-    """new_preds = []
-    for pred in preds:
-        if response_template in pred:
-            responses = pred.strip().split(response_template)
-            responses = [r.strip() for r in responses if len(r.strip()) > 0]
-            new_preds.append(responses[1])
-        else:
-            new_preds.append("-")
-    preds = new_preds
-    """
-    # rougeLSum expects newline after each sentence
+    
     preds = ["\n".join(nltk.sent_tokenize(pred)) for pred in preds]
     labels = ["\n".join(nltk.sent_tokenize(label)) for label in labels]
 
@@ -51,48 +39,21 @@ def generate_prompt_examples(texts):
     return output_texts
 
 def call_model(tokenizer, model, prompt_template, example, max_source_len):
-    #texts = generate_prompt_examples(examples["source"])
-
-    #outputs = model.generate(**inputs, max_new_tokens = 128, use_cache = True)
-    # outputs =  [model.generate(**tokenizer(
-    #     i, return_tensors = "pt").to("cuda"), max_new_tokens = 128, use_cache = True, temperature=0.7, pad_token_id=tokenizer.unk_token_id) for i in texts]
-    # outputs = model.generate(**tokenizer(texts, return_tensors = "pt", padding=True, max_length=1000, truncation=True).to("cuda"), max_new_tokens = 2, use_cache = True)
-    # preds =  [o[0] for o in outputs]
-    """
-    outputs = [
-            out[0]["generated_text"]  # type: ignore
-            for out in pipeline(
-                texts,
-                return_full_text=False,
-                clean_up_tokenization_spaces=True,
-                max_new_tokens=128,
-                pad_token_id=tokenizer.unk_token_id,
-                batch_size=BATCH_SIZE,
-                num_beams=1,
-            )  # type: ignore
-        ]
-    """
     pred_output = []
     labels_output = []
     for i in range(len(example)):
         prompt = f"{prompt_template}{example['source'][i][:max_source_len]}"
         inputs = tokenizer(prompt, return_tensors="pt")
-        generate_ids = model.generate(inputs.input_ids, max_length=max_source_len)
+        generate_ids = model.generate(inputs.input_ids.to(get_current_device() if torch.cuda.is_available() else None), max_length=max_source_len)
         pred = tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         pred_output.append(pred)
         labels_output.append(example['target'][i])
         break
-    # outputs = tokenizer.batch_decode(outputs, skip_special_tokens = True)
-    # outputs = [tokenizer.batch_decode(o, skip_special_tokens = True)[0] for o in outputs]
 
-    return pred_output, labels_output#{"text": examples["source"], "outputs":outputs ,"labels": examples["target"]}
+    return pred_output, labels_output
 
 def evaluate_model(preds, labels, tokenizer, metric_name="rouge"):
     
-        
-        #labels = ["\n".join(nltk.sent_tokenize(label)) for label in labels]
-        #labels_output.append(labels)
-
     metric = evaluate.load(metric_name)
     result = metric.compute(predictions=preds, references=labels, use_stemmer=True)
     result = {k: round(v * 100, 4) for k, v in result.items()}
@@ -130,14 +91,11 @@ def main(args):
     # News dataset is defined as union of Fanpage and IlPost
     dataset_fanpage = load_dataset("ARTeLab/fanpage")
     dataset_ilpost = load_dataset("ARTeLab/ilpost")
-    # train the model over the training + validation sets 
+    # load the testing dataset
     dataset_newsum = DatasetDict()
-    #dataset_newsum["train"] = concatenate_datasets([dataset_fanpage["train"], dataset_ilpost["train"]])
-    #dataset_newsum["validation"] = concatenate_datasets([dataset_fanpage["validation"], dataset_ilpost["validation"]])
+    
     dataset_newsum["test"] = concatenate_datasets([dataset_fanpage["test"], dataset_ilpost["test"]])
-    #dataset_newsum["train"] = dataset_newsum["train"]#.select(range(100))
-    #dataset_newsum["validation"] = dataset_newsum["validation"]#.select(range(5000))
-    dataset_newsum["test"] = dataset_newsum["test"].select(range(1))
+    dataset_newsum["test"] = dataset_newsum["test"].select(range(8))
     # TOKENIZER
     print("## Initialize Tokenizer...")
 
@@ -147,12 +105,11 @@ def main(args):
     initial_token_count = len(tokenizer)
     added_token_count = tokenizer.add_special_tokens({"additional_special_tokens": [prompt_template, response_template]})
     print("initial_token_count = len(tokenizer) ", initial_token_count)
-    #print("initial_token_count = len(tokenizer) +added_token_count", initial_token_count+added_token_count)
     # MODEL
     print("## Load Model...")
 
     if use_lora: ## LORA:
-        ## LORA PARAMTERS
+        ## LORA PARAMETERS
         r = config_loaded["lora_r"]
         lora_alpha = config_loaded["lora_alpha"]
         target_modules = config_loaded["target_modules"]
@@ -195,12 +152,10 @@ def main(args):
         model = AutoModelForCausalLM.from_pretrained(model_name,
                                                 torch_dtype=torch.bfloat16,
                                                 attn_implementation="flash_attention_2")
-    collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
     pred_output, labels_output = call_model(tokenizer, model, prompt_template, dataset_newsum["test"], max_source_len)
     preds, labels = postprocess_text(pred_output, labels_output)
-    #preds = ['hello']
-    #labels = ['hello']
     results = evaluate_model(preds, labels, tokenizer)
+    #dump the results in json
     with open(results_dir+"/results_better_fit_test.json", "w") as f:
         f.writelines(json.dumps(results) + "\n")
 if __name__ == "__main__":

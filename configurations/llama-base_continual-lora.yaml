@@ -27,5 +27,6 @@ weight_decay: 0.005
 learning_rate: 2.0e-04
 lr_scheduler_type: "linear"
 warmup_ratio: 0.1
-max_source_len: 5000
+max_source_len: 3000
 max_target_len: 500
+pad_to_multiple_of: 8 
