@@ -45,6 +45,7 @@ def call_model(tokenizer, model, prompt_template, example, max_source_len):
         prompt = f"{prompt_template}{example['source'][i][:max_source_len]}"
         inputs = tokenizer(prompt, return_tensors="pt")
         generate_ids = model.generate(inputs.input_ids.to(get_current_device() if torch.cuda.is_available() else None), max_length=max_source_len)
+        generate_ids = np.where(generate_ids.cpu() != -100, generate_ids.cpu(), tokenizer.pad_token_id)
         pred = tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         pred_output.append(pred)
         labels_output.append(example['target'][i])
@@ -95,12 +96,12 @@ def main(args):
     dataset_newsum = DatasetDict()
     
     dataset_newsum["test"] = concatenate_datasets([dataset_fanpage["test"], dataset_ilpost["test"]])
-    dataset_newsum["test"] = dataset_newsum["test"]#.select(range(8))
+    dataset_newsum["test"] = dataset_newsum["test"]
     # TOKENIZER
     print("## Initialize Tokenizer...")
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    tokenizer.pad_token = tokenizer.unk_token
+    tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = 'right'
     initial_token_count = len(tokenizer)
     added_token_count = tokenizer.add_special_tokens({"additional_special_tokens": [prompt_template, response_template]})
