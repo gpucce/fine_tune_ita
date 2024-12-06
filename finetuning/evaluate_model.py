@@ -49,7 +49,6 @@ def call_model(tokenizer, model, prompt_template, example, max_source_len):
         pred = tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         pred_output.append(pred)
         labels_output.append(example['target'][i])
-        break
 
     return pred_output, labels_output
 
@@ -57,9 +56,9 @@ def evaluate_model(preds, labels, tokenizer, metric_name="rouge"):
     
     metric = evaluate.load(metric_name)
     result = metric.compute(predictions=preds, references=labels, use_stemmer=True)
-    result = {k: round(v * 100, 4) for k, v in result.items()}
     prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds]
     result["gen_len"] = np.mean(prediction_lens)
+    result = {k: round(v * 100, 4) for k, v in result.items()}
     return result
 
 def main(args):
@@ -96,7 +95,7 @@ def main(args):
     dataset_newsum = DatasetDict()
     
     dataset_newsum["test"] = concatenate_datasets([dataset_fanpage["test"], dataset_ilpost["test"]])
-    dataset_newsum["test"] = dataset_newsum["test"]
+    dataset_newsum["test"] = dataset_newsum["test"]#.select(range(8))
     # TOKENIZER
     print("## Initialize Tokenizer...")
 
