@@ -48,19 +48,19 @@ max_target_len: 300
 To run a training lets do this on multiple GPU
 
 ````bash
-CUDA_VISIBLE_DEVICES="5,6" accelerate launch --config_file=./accelerate_configurations/fsdp_lora.yaml     --num_processes 2 --main_process_port=29501     ./finetuning/finetune_summary.py     -c /raid/homes/kajal.negi/workspace/fine_tune_ita/configurations/llama-base_continual-lora.yaml
+CUDA_VISIBLE_DEVICES="5,6" accelerate launch --config_file=./accelerate_configurations/fsdp_lora.yaml     --num_processes 2 --main_process_port=29501     ./finetuning/finetune_summary.py     -c /./configurations/llama-base_continual-lora.yaml
 ````
 
 To run on multiple GPU for evaluating original model
 ````bash
 
-CUDA_VISIBLE_DEVICES="0,1,5,6" accelerate launch --config_file=./accelerate_configurations/fsdp_lora.yaml --main_process_port=29502 ./finetuning/evaluate_model.py -c /raid/homes/kajal.negi/workspace/fine_tune_ita/configurations/llama-base_continual-lora.yaml
+CUDA_VISIBLE_DEVICES="0,1,5,6" accelerate launch --config_file=./accelerate_configurations/fsdp_lora.yaml --main_process_port=29502 ./finetuning/evaluate_model.py -c ./configurations/llama-base_continual-lora.yaml
 ````
 
 To run on multiple GPU for evaluating adapted model
 
 ````bash
 
-CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES="1,5,6" accelerate launch --config_file=./accelerate_configurations/fsdp_lora.yaml --main_process_port=29501 ./finetuning/evaluate_adapter_model.py -c /raid/homes/kajal.negi/workspace/fine_tune_ita/configurations/llama-adapter_continual-lora.yaml
+CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES="1,5,6" accelerate launch --config_file=./accelerate_configurations/fsdp_lora.yaml --main_process_port=29501 ./finetuning/evaluate_adapter_model.py -c ./configurations/llama-adapter_continual-lora.yaml
 ````
 
