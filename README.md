@@ -48,7 +48,7 @@ max_target_len: 300
 To run a training lets do this on multiple GPU
 
 ````bash
-CUDA_VISIBLE_DEVICES="5,6" accelerate launch --config_file=./accelerate_configurations/fsdp_lora.yaml     --num_processes 2 --main_process_port=29501     ./finetuning/finetune_summary.py     -c /./configurations/llama-base_continual-lora.yaml
+CUDA_VISIBLE_DEVICES="5,6" accelerate launch --config_file=./accelerate_configurations/fsdp_lora.yaml     --num_processes 2 --main_process_port=29501     ./finetuning/finetune_summary.py     -c ./configurations/llama-base_continual-lora.yaml
 ````
 
 To run on multiple GPU for evaluating original model
