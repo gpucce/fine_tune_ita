@@ -11,6 +11,7 @@ import yaml
 import argparse
 from accelerate import Accelerator
 import os
+import time
 os.environ['WANDB_MODE'] ="offline"
 os.environ['CUDA_LAUNCH_BLOCKING']="1"
 os.environ['TORCH_USE_CUDA_DSA'] = "1"
@@ -101,20 +102,29 @@ def main(args):
     max_source_len = config_loaded["max_source_len"]
     max_target_len = config_loaded["max_target_len"]
     max_seq_length = max_source_len + max_target_len
+    dataset_dir = config_loaded["dataset_dir"]
+
     # DATASET
     print("## Load Dataset...")
 
     # News dataset is defined as union of Fanpage and IlPost
-    dataset_fanpage = load_dataset("ARTeLab/fanpage")
-    dataset_ilpost = load_dataset("ARTeLab/ilpost")
-    # train the model over the training + validation sets 
-    dataset_newsum = DatasetDict()
-    dataset_newsum["train"] = concatenate_datasets([dataset_fanpage["train"], dataset_ilpost["train"]])
-    dataset_newsum["validation"] = concatenate_datasets([dataset_fanpage["validation"], dataset_ilpost["validation"]])
-    dataset_newsum["test"] = concatenate_datasets([dataset_fanpage["test"], dataset_ilpost["test"]])
-    dataset_newsum["train"] = dataset_newsum["train"]
-    dataset_newsum["validation"] = dataset_newsum["validation"]
-    dataset_newsum["test"] = dataset_newsum["test"]
+    #dataset_fanpage = load_dataset("ARTeLab/fanpage", split="train")
+    #dataset_ilpost = load_dataset("ARTeLab/ilpost", split="train")
+    # train the model over the training
+    #dataset_newsum = concatenate_datasets([dataset_fanpage.shuffle(seed=42).select(range(1000)), dataset_ilpost.shuffle(seed=42).select(range(1000))])
+    #dataset_newsum.to_json(dataset_dir+'/'+'train-fanpage1k-ilpost1k.json')
+    #dataset_fanpage = load_dataset("ARTeLab/fanpage", split="validation")
+    #dataset_ilpost = load_dataset("ARTeLab/ilpost", split="validation")
+    #dataset_newsum = concatenate_datasets([dataset_fanpage.shuffle(seed=42).select(range(1000)), dataset_ilpost.shuffle(seed=42).select(range(1000))])
+    #dataset_newsum.to_json(dataset_dir+'/'+'val-fanpage1k-ilpost1k.json')
+   # dataset_newsum["train"] = dataset_newsum["train"]
+   # dataset_newsum["validation"] = dataset_newsum["validation"]
+    #dataset_newsum["test"] = dataset_newsum["test"]
+    #load train dataset from the disk
+    data_files = {"train": dataset_dir+'/'+'train-fanpage1k-ilpost1k.json'}
+    train_dataset_newsum = load_dataset("json", data_files=data_files, split="train")
+    data_files = {"validation": dataset_dir+'/'+'val-fanpage1k-ilpost1k.json'}
+    val_dataset_newsum = load_dataset("json", data_files=data_files, split="validation")
     # TOKENIZER
     print("## Initialize Tokenizer...")
 
@@ -164,7 +174,7 @@ def main(args):
 
 
         model = get_peft_model(model, lora_config)
-
+        #model.config.to_json_file(model_name+"/adapter_config.json”)
         model.config.use_cache = False
     else:
         model = AutoModelForCausalLM.from_pretrained(model_name,
@@ -212,12 +222,12 @@ def main(args):
 
     random.seed(42)
 
-    idx = random.sample(range(len(dataset_newsum["validation"])), 4096)
+    #idx = random.sample(range(len(dataset_newsum["validation"])), 4096)
 
     trainer = SFTTrainer(
         model,
-        train_dataset=dataset_newsum["train"],
-        eval_dataset=dataset_newsum["validation"].select(idx),
+        train_dataset=train_dataset_newsum,#dataset_newsum["train"],
+        eval_dataset=val_dataset_newsum,#dataset_newsum["validation"].select(idx),
         tokenizer=tokenizer,
         formatting_func=generate_formatting_prompts_func(tokenizer, prompt_template, response_template, max_source_len, max_target_len),
         # compute_metrics=generate_compute_metrics(tokenizer, "rouge"),
@@ -225,9 +235,14 @@ def main(args):
         max_seq_length=max_seq_length,#2048,
         args=training_args
     )
-
+    start = time.time()
     trainer.train()
-
+    end = time.time()- start
+    with open('train_time.txt', 'w') as wr:
+        wr.write("Time taken(s): ", str(end))
+        wr.write("\nTime taken(m): ", str(end/60))
+        wr.write("\nTime taken(hrs): ", str(end/3600))
+    wr.close()
     # trainer.save_model(output_dir)
     accelerator = trainer.accelerator
     
