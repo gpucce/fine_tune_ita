@@ -110,7 +110,7 @@ def main(args):
     #dataset_newsum = concatenate_datasets([dataset_fanpage.shuffle(seed=42).select(range(1000)), dataset_ilpost.shuffle(seed=42).select(range(1000))])
     #dataset_newsum.to_json(dataset_dir+'/'+'test-fanpage1k-ilpost1k.json')            
     data_files = {"test": dataset_dir+'/'+'test-fanpage1k-ilpost1k.json'}
-    dataset_newsum = load_dataset("json", data_files=data_files, split="test")
+    dataset_newsum = load_dataset("json", data_files=data_files, split="test").select(range(4))
 
     # TOKENIZER
     print("## Initialize Tokenizer...")
