@@ -10,18 +10,26 @@ import nltk
 import yaml
 import argparse
 from accelerate import Accelerator
-
+import os
+import time
+os.environ['WANDB_MODE'] ="offline"
+os.environ['CUDA_LAUNCH_BLOCKING']="1"
+os.environ['TORCH_USE_CUDA_DSA'] = "1"
 def get_current_device() -> int:
     """Get the current device. For GPU we return the local process index to enable multiple GPU training."""
     return Accelerator().local_process_index if torch.cuda.is_available() else "cpu"
 
 # FORMATTING
-def generate_formatting_prompts_func(tokenizer, prompt_template, response_template):
+def generate_formatting_prompts_func(tokenizer, prompt_template, response_template, max_source_len, max_target_len):
     def formatting_prompts_func(example):
         output_texts = []
         for i in range(len(example['source'])):
-            text = f"{prompt_template} {example['source'][i]}\n{response_template} {example['target'][i]}{tokenizer.eos_token}"
-            output_texts.append(text)
+            if max_source_len >0 and max_target_len >0:
+                text = f"{prompt_template} {example['source'][i][:max_source_len]}\n{response_template} {example['target'][i][:max_target_len]}{tokenizer.eos_token}"
+                output_texts.append(text)
+            else:
+                text = f"{prompt_template} {example['source'][i]}\n{response_template} {example['target'][i]}{tokenizer.eos_token}"
+                output_texts.append(text)
         return output_texts
     
     return formatting_prompts_func
@@ -69,6 +77,7 @@ def generate_compute_metrics(tokenizer, metric_name="rouge"):
     
     return compute_metrics
 
+
 def main(args):
 
     config_path = args.config_path
@@ -90,19 +99,32 @@ def main(args):
     learning_rate = config_loaded["learning_rate"]
     lr_scheduler_type = config_loaded["lr_scheduler_type"]
     warmup_ratio = config_loaded["warmup_ratio"]
+    max_source_len = config_loaded["max_source_len"]
+    max_target_len = config_loaded["max_target_len"]
+    max_seq_length = max_source_len + max_target_len
+    dataset_dir = config_loaded["dataset_dir"]
 
     # DATASET
     print("## Load Dataset...")
 
     # News dataset is defined as union of Fanpage and IlPost
-    dataset_fanpage = load_dataset("ARTeLab/fanpage")
-    dataset_ilpost = load_dataset("ARTeLab/ilpost")
-    # train the model over the training + validation sets 
-    dataset_newsum = DatasetDict()
-    dataset_newsum["train"] = concatenate_datasets([dataset_fanpage["train"], dataset_ilpost["train"]])
-    dataset_newsum["validation"] = concatenate_datasets([dataset_fanpage["validation"], dataset_ilpost["validation"]])
-    dataset_newsum["test"] = concatenate_datasets([dataset_fanpage["test"], dataset_ilpost["test"]])
-
+    #dataset_fanpage = load_dataset("ARTeLab/fanpage", split="train")
+    #dataset_ilpost = load_dataset("ARTeLab/ilpost", split="train")
+    # train the model over the training
+    #dataset_newsum = concatenate_datasets([dataset_fanpage.shuffle(seed=42).select(range(1000)), dataset_ilpost.shuffle(seed=42).select(range(1000))])
+    #dataset_newsum.to_json(dataset_dir+'/'+'train-fanpage1k-ilpost1k.json')
+    #dataset_fanpage = load_dataset("ARTeLab/fanpage", split="validation")
+    #dataset_ilpost = load_dataset("ARTeLab/ilpost", split="validation")
+    #dataset_newsum = concatenate_datasets([dataset_fanpage.shuffle(seed=42).select(range(1000)), dataset_ilpost.shuffle(seed=42).select(range(1000))])
+    #dataset_newsum.to_json(dataset_dir+'/'+'val-fanpage1k-ilpost1k.json')
+   # dataset_newsum["train"] = dataset_newsum["train"]
+   # dataset_newsum["validation"] = dataset_newsum["validation"]
+    #dataset_newsum["test"] = dataset_newsum["test"]
+    #load train dataset from the disk
+    data_files = {"train": dataset_dir+'/'+'train-fanpage1k-ilpost1k.json'}
+    train_dataset_newsum = load_dataset("json", data_files=data_files, split="train")
+    data_files = {"validation": dataset_dir+'/'+'val-fanpage1k-ilpost1k.json'}
+    val_dataset_newsum = load_dataset("json", data_files=data_files, split="validation")
     # TOKENIZER
     print("## Initialize Tokenizer...")
 
@@ -111,7 +133,6 @@ def main(args):
     tokenizer.padding_side = 'right'
     initial_token_count = len(tokenizer)
     added_token_count = tokenizer.add_special_tokens({"additional_special_tokens": [prompt_template, response_template]})
-
     # MODEL
     print("## Load Model...")
 
@@ -153,7 +174,7 @@ def main(args):
 
 
         model = get_peft_model(model, lora_config)
-
+        #model.config.to_json_file(model_name+"/adapter_config.json”)
         model.config.use_cache = False
     else:
         model = AutoModelForCausalLM.from_pretrained(model_name,
@@ -201,22 +222,27 @@ def main(args):
 
     random.seed(42)
 
-    idx = random.sample(range(len(dataset_newsum["validation"])), 4096)
+    #idx = random.sample(range(len(dataset_newsum["validation"])), 4096)
 
     trainer = SFTTrainer(
         model,
-        train_dataset=dataset_newsum["train"],
-        eval_dataset=dataset_newsum["validation"].select(idx),
+        train_dataset=train_dataset_newsum,#dataset_newsum["train"],
+        eval_dataset=val_dataset_newsum,#dataset_newsum["validation"].select(idx),
         tokenizer=tokenizer,
-        formatting_func=generate_formatting_prompts_func(tokenizer, prompt_template, response_template),
+        formatting_func=generate_formatting_prompts_func(tokenizer, prompt_template, response_template, max_source_len, max_target_len),
         # compute_metrics=generate_compute_metrics(tokenizer, "rouge"),
         data_collator=collator,
-        max_seq_length=2048,
+        max_seq_length=max_seq_length,#2048,
         args=training_args
     )
-
+    start = time.time()
     trainer.train()
-
+    end = time.time()- start
+    with open('train_time.txt', 'w') as wr:
+        wr.write("Time taken(s): ", str(end))
+        wr.write("\nTime taken(m): ", str(end/60))
+        wr.write("\nTime taken(hrs): ", str(end/3600))
+    wr.close()
     # trainer.save_model(output_dir)
     accelerator = trainer.accelerator
     
@@ -224,13 +250,12 @@ def main(args):
     unwrapped_model = unwrapped_model.merge_and_unload()
     
     unwrapped_model.save_pretrained(
-        args.output_dir,
+        output_dir,
         is_main_process=accelerator.is_main_process,
         save_function=accelerator.save,
         state_dict=accelerator.get_state_dict(model),
     )
     tokenizer.save_pretrained(output_dir)
-
 
 
 if __name__ == "__main__":

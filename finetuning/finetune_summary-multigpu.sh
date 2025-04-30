@@ -12,18 +12,18 @@
 #SBATCH -A IscrB_medit
 #SBATCH -p boost_usr_prod
 
-module load profile/deeplrn
-module load openmpi/4.1.4--gcc--11.3.0-cuda-11.8 zlib/1.2.13--gcc--11.3.0 cuda/11.8
+#module load profile/deeplrn
+#module load openmpi/4.1.4--gcc--11.3.0-cuda-11.8 zlib/1.2.13--gcc--11.3.0 cuda/11.8
 
 # export OMP_PROC_BIND=true
-export HF_DATASETS_CACHE=/leonardo_scratch/large/userexternal/lmoroni0/hf_cache
+export HF_DATASETS_CACHE=/home/kajalnegi/raid/hf_cache
 export WANDB_MODE=offline
+export CUDA_VISIBLE_DEVICES="5"
+source /home/kajalnegi/anaconda3/bin/python3
 
-source /leonardo/home/userexternal/lmoroni0/__Work/minerva_sft/.env/bin/activate
-
-accelerate launch --config_file=/leonardo/home/userexternal/lmoroni0/__Work/minerva_sft/accelerate_configurations/deepspeed_zero2.yaml --num_processes 4 --multi_gpu \
-    /leonardo/home/userexternal/lmoroni0/__Work/minerva_sft/finetuning/finetune_summary.py \
+accelerate launch --config_file=/home/kajalnegi/raid/fine_tune_ita/accelerate_configurations/deepspeed_zero2.yaml --num_processes 4 --multi_gpu \
+    /home/kajalnegi/raid/fine_tune_ita/finetuning/finetune_summary.py \
     -c $1
-    #-c /leonardo/home/userexternal/lmoroni0/__Work/minerva_sft/configurations/mistral-base_continual.yaml
+    #-c /home/kajalnegi/raid/fine_tune_ita/configurations/llama-base_continual-lora.yaml
 
 

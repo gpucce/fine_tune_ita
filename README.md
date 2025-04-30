@@ -1,4 +1,4 @@
-# minerva_sft
+# Adapted LLAMA using LORA
 
 This repo contains several utilities to finetune Decoder-only LLM on two different generative downstream tasks, **News Summarization** and **Machine Translation EN-IT|IT-EN**.
 
@@ -7,9 +7,6 @@ This repo contains several utilities to finetune Decoder-only LLM on two differe
 Installing this tool is very straight forward
 
 ``` sh
-git clone git@github.com:Andrew-Wyn/minerva_sft.git
-
-cd minerva_sft
 
 pip install -r requirements.txt
 ```
@@ -42,44 +39,28 @@ weight_decay: 5e-3
 learning_rate: 1e-5
 lr_scheduler_type: "linear"
 wermup_ratio: 0.3
+max_source_len: 1000
+max_target_len: 300
 ````
 
 ### Run
 
-To run a training lets do this on single GPU
+To run a training lets do this on multiple GPU
 
 ````bash
-python finetuning/finetune_summary.py -c configurations/mistral-base_continual.yaml
+CUDA_VISIBLE_DEVICES="5,6" accelerate launch --config_file=./accelerate_configurations/fsdp_lora.yaml     --num_processes 2 --main_process_port=29501     ./finetuning/finetune_summary.py     -c ./configurations/llama-base_continual-lora.yaml
 ````
 
-Run un 4 GPU with deepspeed setting 3
+To run on multiple GPU for evaluating original model
+````bash
+
+CUDA_VISIBLE_DEVICES="0,1,5,6" accelerate launch --config_file=./accelerate_configurations/fsdp_lora.yaml --main_process_port=29502 ./finetuning/evaluate_model.py -c ./configurations/llama-base_continual-lora.yaml
+````
+
+To run on multiple GPU for evaluating adapted model
 
 ````bash
-source /leonardo/home/userexternal/lmoroni0/__Work/minerva_sft/.env/bin/activate
 
-accelerate launch accelerate launch --multi_gpu --config_file=accelerate_configurations/deepspeed_zero3.yaml --num_processes 4 finetuning/finetune_summary.py -c configurations/mistral-base_continual.yaml
+CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES="1,5,6" accelerate launch --config_file=./accelerate_configurations/fsdp_lora.yaml --main_process_port=29501 ./finetuning/evaluate_adapter_model.py -c ./configurations/llama-adapter_continual-lora.yaml
 ````
 
-#### LORA
-
-to run lora on single GPU
-
-````sh
-source /leonardo/home/userexternal/lmoroni0/__Work/minerva_sft/.env/bin/activate
-
-python finetuning/finetune_summary.py -c configurations/mistral-base_continual-lora.yaml
-````
-
-#### Utilities shell scripts
-
-I added some shell scripts that can be invoked to run the slurm stuff, please substitute the paths and account stuff as you want
-
-- finetuning/finetune_summary-lora.sh
-- finetuning/finetune_summary-multigpu.sh
-- finetuning/finetune_summary-multinode.sh
-
-E.G.
-
-````sh
-sbatch finetuning/finetune_summary-lora.sh configurations/mistral-base_continual-lora.yaml
-````

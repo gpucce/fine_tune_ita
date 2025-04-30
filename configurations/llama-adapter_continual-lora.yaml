@@ -1,6 +1,7 @@
 output_dir: "/raid/homes/kajal.negi/workspace/fine_tune_ita/kajal_edits/model-2k"
-model_name: "/raid/homes/kajal.negi/workspace/fine_tune_ita/model_fine_ita"
-results_dir: "/raid/homes/kajal.negi/workspace/fine_tune_ita/results/original-model"
+model_name: "/raid/homes/kajal.negi/workspace/fine_tune_ita/kajal_edits/model-2k/checkpoint-4608"
+base_model: "/raid/homes/kajal.negi/workspace/fine_tune_ita/model_fine_ita"
+results_dir: "/raid/homes/kajal.negi/workspace/fine_tune_ita/results/model-2k"
 dataset_dir: "/raid/homes/kajal.negi/workspace/fine_tune_ita/kajal_edits/dataset"
 # Lora Config
 use_lora: true
